@@ -4,12 +4,13 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 import operator
 import sys
+from datetime import datetime
 
 class Settings():
     MONGO_HOST = "127.0.0.1"
     MONGO_PORT = 27017
     DB_NAME = "local"
-    INPUT_COLLECTION = "export_100k_uk"
+    INPUT_COLLECTION = "export_adzuna_5k_uk"
     CLEAN_COLLECTION = "clean_col"
     PARTLY_CLEAN_COLLECTION = "partly_clean_col"
     TAGS_COLLECTION = "tags_col"
@@ -45,6 +46,7 @@ class Cleaner():
 
 
     def clean(self):
+        sys.setrecursionlimit(5000) # TODO: Check the value on my personal computer
         input_domains = self.input_col.distinct('domain')
         partly_clean_domains = self.partly_clean_col.distinct('domain')
         clean_domains = self.clean_col.distinct('domain')
@@ -76,6 +78,7 @@ class Cleaner():
         pages_processed = 0
 
         # choosing and counting tags appearance
+        start_time = datetime.now()
         for page in input_col.find({'domain': domain}):
 
             if pages_processed%1000 == 0:
@@ -96,6 +99,8 @@ class Cleaner():
                     lines_appearance[stag] = 1
 
             pages_processed += 1
+
+        print("Time: ", datetime.now() - start_time)
 
         # choosing lines for removing
         repeating_lines = 0
