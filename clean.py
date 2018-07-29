@@ -4,18 +4,21 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 import operator
 import sys
-from datetime import datetime
+from multiprocessing import Process, Manager
+import os
 
-class Settings():
+
+class Settings:
     MONGO_HOST = "127.0.0.1"
     MONGO_PORT = 27017
     DB_NAME = "local"
-    INPUT_COLLECTION = "export_adzuna_5k_uk"
+    INPUT_COLLECTION = "export_adzuna_1500_uk"
     CLEAN_COLLECTION = "clean_col"
     PARTLY_CLEAN_COLLECTION = "partly_clean_col"
     TAGS_COLLECTION = "tags_col"
 
-class Cleaner():
+
+class Cleaner:
 
     def __init__(self):
         client = pymongo.MongoClient(connect=False)
@@ -29,78 +32,83 @@ class Cleaner():
 
         self.input_col = self.db[Settings.INPUT_COLLECTION]
 
-        try:
-            self.clean_col = self.db.create_collection(Settings.CLEAN_COLLECTION)
-        except:
-            self.clean_col = self.db[Settings.CLEAN_COLLECTION]
+        # try:
+        #     self.clean_col = self.db.create_collection(Settings.CLEAN_COLLECTION)
+        # except:
+        #     self.clean_col = self.db[Settings.CLEAN_COLLECTION]
 
         try:
             self.partly_clean_col = self.db.create_collection(Settings.PARTLY_CLEAN_COLLECTION)
         except:
             self.partly_clean_col = self.db[Settings.PARTLY_CLEAN_COLLECTION]
 
-        try:
-            self.tags_col = self.db.create_collection(Settings.TAGS_COLLECTION)
-        except:
-            self.tags_col = self.db[Settings.TAGS_COLLECTION]
-
+        # try:
+        #     self.tags_col = self.db.create_collection(Settings.TAGS_COLLECTION)
+        # except:
+        #     self.tags_col = self.db[Settings.TAGS_COLLECTION]
 
     def clean(self):
-        sys.setrecursionlimit(5000) # TODO: Check the value on my personal computer
+        sys.setrecursionlimit(5000)  # TODO: Check the value on my personal computer
         input_domains = self.input_col.distinct('domain')
         partly_clean_domains = self.partly_clean_col.distinct('domain')
-        clean_domains = self.clean_col.distinct('domain')
-
-        input_domains = list(set(input_domains)-set(clean_domains)-set(partly_clean_domains))
-
-        for domain in partly_clean_domains:
-            self.clean_domain(domain, self.partly_clean_col)
-
-            quit_choice = input('\n\n==================================================================================='
-                         '\nDo you want to quit?(Y/n)\n')
-
-            if quit_choice in ["y", "Y"]:
-                sys.exit()
+        # clean_domains = self.clean_col.distinct('domain')
+        #
+        # input_domains = list(set(input_domains)-set(clean_domains)-set(partly_clean_domains))
+        #
+        # for domain in partly_clean_domains:
+        #     self.clean_domain(domain, self.partly_clean_col)
+        #
+        #     quit_choice = input('\n\n==================================================================================='
+        #                         '\nDo you want to quit?(Y/n)\n')
+        #
+        #     if quit_choice in ["y", "Y"]:
+        #         sys.exit()
 
         for domain in input_domains:
             print(domain)
             self.clean_domain(domain, self.input_col)
 
             quit_choice = input('\n\n==================================================================================='
-                         '\nDo you want to quit?(Y/n)\n')
+                                '\nDo you want to quit?(Y/n)\n')
 
             if quit_choice in ["y", "Y"]:
                 sys.exit()
 
     def clean_domain(self, domain, input_col):
-        print('Domain: %s, Collection: %s' % (domain, input_col.name))
         lines_appearance = {}
-        pages_processed = 0
+        # pages_processed = 0
 
-        # choosing and counting tags appearance
-        start_time = datetime.now()
-        for page in input_col.find({'domain': domain}):
+        domain_htmls = list(input_col.find({'domain': domain}))
 
-            if pages_processed%1000 == 0:
-                print('%s, pages_processed = %d, len(lines_appearance) = %d' %
-                      (str(datetime.now()), pages_processed, len(lines_appearance)))
+        num_processors = 7  # TODO: check amount of tags in slowly processed HTMLs
+        batch_size = len(domain_htmls) // num_processors
+        manager = Manager()
+        tag_batches = [manager.dict() for i in range(num_processors)]  # TODO: replace with Queue
+        processes = []
 
-            if page.get('no_repeat_html'):
-                soup = BeautifulSoup(page['no_repeat_html'], 'html.parser')
+        for processor_id in range(num_processors):
+            if processor_id < num_processors-1:
+                batch = domain_htmls[:batch_size]
             else:
-                soup = BeautifulSoup(page['full_page_html'], 'html.parser')
+                batch = domain_htmls[:]
 
-            for tag in soup.find_all():
-                stag = str(tag)
+            p = Process(target=collecting_tags, args=(batch, tag_batches[processor_id]))
+            processes.append(p)
+            p.start()
 
-                if stag in lines_appearance:
-                    lines_appearance[stag] += 1
-                else:
-                    lines_appearance[stag] = 1
+            domain_htmls = domain_htmls[batch_size:]
 
-            pages_processed += 1
+        for p in processes:
+            p.join()
 
-        print("Time: ", datetime.now() - start_time)
+        print("JOINED")
+
+        for dict in tag_batches:
+            print(len(dict))
+
+        # TODO: merge tag_batches
+
+        sys.exit()
 
         # choosing lines for removing
         repeating_lines = 0
@@ -211,6 +219,37 @@ class Cleaner():
                 self.partly_clean_col.insert_one(page)
             self.clean_col.delete_many({'domain': domain})
             print('Domain "%s" was added to PARTLY cleaned' % domain)
+
+
+def collecting_tags(batch, lines_appearance):
+    # choosing and counting tags appearance
+    pages_processed = 0
+    pid = os.getpid()
+    print("Process %d created, batch len: %d" % (pid, len(batch)))
+
+    start_time = datetime.now()
+    for page in batch:  # input_col.find({'domain': domain}):
+
+        if pages_processed % 100 == 0:
+            print('%s, %s, pages_processed = %d, len(lines_appearance) = %d' %
+                  (pid, str(datetime.now()), pages_processed, len(lines_appearance)))
+
+        if page.get('no_repeat_html'):
+            soup = BeautifulSoup(page['no_repeat_html'], 'html.parser')
+        else:
+            soup = BeautifulSoup(page['full_page_html'], 'html.parser')
+
+        for tag in soup.find_all():
+            stag = str(tag)
+
+            if stag in lines_appearance:
+                lines_appearance[stag] += 1
+            else:
+                lines_appearance[stag] = 1
+
+        pages_processed += 1
+
+    print("Time: %s, Process: %d" % (datetime.now() - start_time, pid))
 
 
 if __name__ == "__main__":
