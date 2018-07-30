@@ -2,57 +2,83 @@ import os
 import settings
 
 from queue import Empty
-from multiprocessing import Pool
+from multiprocessing import Pool, Queue, JoinableQueue
 from datetime import datetime
 from bs4 import BeautifulSoup
 
 
 class TagCounter:
 
-    def __init__(self, domain, input_col, htmls_queue, tags_queue):
+    def __init__(self, domain, input_col):
         self.domain = domain
-        self.tag_appearance = {}
         self.input_col = input_col
-        self.htmls_queue = htmls_queue
-        self.tags_queue = tags_queue
+        self.htmls_queue = JoinableQueue()
+        self.tags_queue = Queue()
+        self.tag_count = {}
 
-    def create_processors(self, processors_amount):
-        domain_htmls = list(self.input_col.find({'domain': self.domain}))
+    def count_tags(self):
+        tag_count_start_time = datetime.now()
+        self.create_processors()
+
+        print("Output tags_queue size: ", self.tags_queue.qsize())
+
+        tags_merge_start_time = datetime.now()
+        while True:  # TODO: move tags merging to separete file (>20% processing time)
+
+            try:
+                tags_batch = self.tags_queue.get(True, 2)
+            except Empty:
+                print("No batches in tags_queue. Output Queue size: ", self.tags_queue.qsize(), " Input Queue size: ", self.htmls_queue.qsize())
+                break
+
+            for tag, count in tags_batch.items():
+                if self.tag_count.get(tag):
+                    self.tag_count[tag] += count
+                else:
+                    self.tag_count[tag] = count
+
+        finish_time = datetime.now()
+        print("Tags merging time: %s" % (finish_time - tags_merge_start_time))
+
+        print("Tags counting time: %s" % (finish_time - tag_count_start_time))
+
+    # def persist_tags(): saves to pickle file
+
+    def create_processors(self):
+        domain_htmls = list(self.input_col.find({'domain': self.domain}))  # TODO: get slices from mongo
 
         # TODO: check amount of tags in slowly processed HTMLs
         batch_size = settings.BATCH_SIZE
 
+        html_batch_start_time = datetime.now()
+
         while domain_htmls:
             batch = domain_htmls[:batch_size]
-            self.htmls_queue.put(batch)
+            self.htmls_queue.put(batch)  # TODO: move html_batching to separete process
             domain_htmls = domain_htmls[batch_size:]
 
-        print("HTML batches count: ", self.htmls_queue.qsize())
-        Pool(processors_amount, self.collect_tags, (self.htmls_queue, self.tags_queue))
-        self.htmls_queue.join()
-        self.tag_appearance = {}  # TODO: merge tag_batches
+        print("HTMLs batching time: %s" % (datetime.now() - html_batch_start_time))
 
-    def collect_tags(self, input_queue, output_queue):
-        # choosing and counting tags appearance
-        lines_appearance = {}
+        print("Input htmls_queue size: ", self.htmls_queue.qsize())
+        Pool(settings.NUM_PROCESSORS, self.processor)
+        self.htmls_queue.join()
+
+    def processor(self):
         pages_processed = 0
         pid = os.getpid()
 
         while True:
+            tag_count = {}
 
             try:
-                htmls_batch = input_queue.get(True, 2)
+                htmls_batch = self.htmls_queue.get(True, 2)  # TODO: test changing timeout
             except Empty:
-                print("No batches in input, pid: ", pid, " Output Queue size: ", self.tags_queue.qsize(), " Input Queue size: ", self.htmls_queue.qsize())
+                print("No batches in htmls_queue, pid: ", pid, " Output Queue size: ", self.tags_queue.qsize(), " Input Queue size: ", self.htmls_queue.qsize())
                 break
 
             print("Process %d created, batch len: %d" % (pid, len(htmls_batch)))
 
-            for page in htmls_batch:  # TODO: consume from Queue
-
-                if pages_processed % 100 == 0:
-                    print('%s, %s, pages_processed = %d, len(lines_appearance) = %d' %
-                          (pid, str(datetime.now()), pages_processed, len(lines_appearance)))
+            for page in htmls_batch:
 
                 if page.get('no_repeat_html'):
                     soup = BeautifulSoup(page['no_repeat_html'], 'html.parser')
@@ -62,12 +88,16 @@ class TagCounter:
                 for tag in soup.find_all():
                     stag = str(tag)
 
-                    if stag in lines_appearance:
-                        lines_appearance[stag] += 1
+                    if stag in tag_count:
+                        tag_count[stag] += 1
                     else:
-                        lines_appearance[stag] = 1
+                        tag_count[stag] = 1
 
                 pages_processed += 1
 
-            output_queue.put(sum)
-            input_queue.task_done()
+                if pages_processed % 100 == 0:
+                    print('%s, %s, pages_processed = %d, len(tag_count) = %d' %
+                          (pid, str(datetime.now()), pages_processed, len(tag_count)))
+
+            self.tags_queue.put(tag_count)
+            self.htmls_queue.task_done()

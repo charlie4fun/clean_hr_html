@@ -3,7 +3,6 @@ import operator
 import sys
 import settings
 
-from multiprocessing import Queue, JoinableQueue
 from pymongo.errors import ConnectionFailure
 from datetime import datetime
 from bs4 import BeautifulSoup
@@ -67,20 +66,11 @@ class Cleaner:
                 sys.exit()
 
     def clean_domain(self, domain, input_col):
-        pages_processed = 0
 
-        lines_appearance = {}
+        tag_counter = TagCounter(domain, input_col)
+        tag_counter.count_tags()
+        print("Tags count: ", len(tag_counter.tag_count))
 
-        input_queue = JoinableQueue()
-        output_queue = Queue()
-        tag_counter = TagCounter(domain, input_col, input_queue, output_queue)
-
-        start_time = datetime.now()
-        tag_counter.create_processors(settings.NUM_PROCESSORS)
-        print("Time: %s" % (datetime.now() - start_time))
-
-
-        print("Output Queue size: ", output_queue.qsize())
         sys.exit()
 
         # choosing lines for removing
