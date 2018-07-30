@@ -3,6 +3,7 @@ import operator
 import sys
 import settings
 
+from multiprocessing import Queue, JoinableQueue
 from pymongo.errors import ConnectionFailure
 from datetime import datetime
 from bs4 import BeautifulSoup
@@ -69,12 +70,15 @@ class Cleaner:
         pages_processed = 0
 
         lines_appearance = {}
-        tag_counter = TagCounter(domain, input_col)
+
+        input_queue = JoinableQueue()
+        output_queue = Queue()
+        tag_counter = TagCounter(domain, input_col, input_queue, output_queue)
 
         tag_counter.create_processors(settings.NUM_PROCESSORS)
 
 
-
+        print("Output Queue size: ", output_queue.qsize())
         sys.exit()
 
         # choosing lines for removing

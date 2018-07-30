@@ -7,3 +7,4 @@ CLEAN_COLLECTION = "clean_col"
 PARTLY_CLEAN_COLLECTION = "partly_clean_col"
 TAGS_COLLECTION = "tags_col"
 NUM_PROCESSORS = 3
+BATCH_SIZE = 300
