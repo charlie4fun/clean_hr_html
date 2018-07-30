@@ -1,22 +1,12 @@
 import pymongo
 import operator
 import sys
+import settings
 
 from pymongo.errors import ConnectionFailure
 from datetime import datetime
 from bs4 import BeautifulSoup
 from tagcounter import TagCounter
-
-
-class Settings:
-    MONGO_HOST = "127.0.0.1"
-    MONGO_PORT = 27017
-    DB_NAME = "local"
-    INPUT_COLLECTION = "export_adzuna_1500_uk"
-    CLEAN_COLLECTION = "clean_col"
-    PARTLY_CLEAN_COLLECTION = "partly_clean_col"
-    TAGS_COLLECTION = "tags_col"
-    NUM_PROCESSORS = 5
 
 
 class Cleaner:
@@ -28,10 +18,10 @@ class Cleaner:
         except ConnectionFailure:
             print("Server not available")
 
-        client = pymongo.MongoClient(Settings.MONGO_HOST, Settings.MONGO_PORT)
-        self.db = client[Settings.DB_NAME]
+        client = pymongo.MongoClient(settings.MONGO_HOST, settings.MONGO_PORT)
+        self.db = client[settings.DB_NAME]
 
-        self.input_col = self.db[Settings.INPUT_COLLECTION]
+        self.input_col = self.db[settings.INPUT_COLLECTION]
 
         # try:
         #     self.clean_col = self.db.create_collection(Settings.CLEAN_COLLECTION)
@@ -39,9 +29,9 @@ class Cleaner:
         #     self.clean_col = self.db[Settings.CLEAN_COLLECTION]
 
         try:
-            self.partly_clean_col = self.db.create_collection(Settings.PARTLY_CLEAN_COLLECTION)
+            self.partly_clean_col = self.db.create_collection(settings.PARTLY_CLEAN_COLLECTION)
         except:
-            self.partly_clean_col = self.db[Settings.PARTLY_CLEAN_COLLECTION]
+            self.partly_clean_col = self.db[settings.PARTLY_CLEAN_COLLECTION]
 
         # try:
         #     self.tags_col = self.db.create_collection(Settings.TAGS_COLLECTION)
@@ -81,7 +71,7 @@ class Cleaner:
         lines_appearance = {}
         tag_counter = TagCounter(domain, input_col)
 
-        tag_counter.create_processors(Settings.NUM_PROCESSORS)
+        tag_counter.create_processors(settings.NUM_PROCESSORS)
 
 
 
