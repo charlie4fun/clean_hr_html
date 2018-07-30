@@ -75,7 +75,9 @@ class Cleaner:
         output_queue = Queue()
         tag_counter = TagCounter(domain, input_col, input_queue, output_queue)
 
+        start_time = datetime.now()
         tag_counter.create_processors(settings.NUM_PROCESSORS)
+        print("Time: %s" % (datetime.now() - start_time))
 
 
         print("Output Queue size: ", output_queue.qsize())
