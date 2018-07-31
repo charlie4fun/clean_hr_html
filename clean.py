@@ -23,37 +23,37 @@ class Cleaner:
 
         self.input_col = self.db[settings.INPUT_COLLECTION]
 
-        # try:
-        #     self.clean_col = self.db.create_collection(Settings.CLEAN_COLLECTION)
-        # except:
-        #     self.clean_col = self.db[Settings.CLEAN_COLLECTION]
+        try:
+            self.clean_col = self.db.create_collection(settings.CLEAN_COLLECTION)
+        except:
+            self.clean_col = self.db[settings.CLEAN_COLLECTION]
 
         try:
             self.partly_clean_col = self.db.create_collection(settings.PARTLY_CLEAN_COLLECTION)
         except:
             self.partly_clean_col = self.db[settings.PARTLY_CLEAN_COLLECTION]
 
-        # try:
-        #     self.tags_col = self.db.create_collection(Settings.TAGS_COLLECTION)
-        # except:
-        #     self.tags_col = self.db[Settings.TAGS_COLLECTION]
+        try:
+            self.tags_col = self.db.create_collection(settings.TAGS_COLLECTION)
+        except:
+            self.tags_col = self.db[settings.TAGS_COLLECTION]
 
     def clean(self):
         sys.setrecursionlimit(5000)  # TODO: Check the value on my personal computer
         input_domains = self.input_col.distinct('domain')
         partly_clean_domains = self.partly_clean_col.distinct('domain')
-        # clean_domains = self.clean_col.distinct('domain')
-        #
-        # input_domains = list(set(input_domains)-set(clean_domains)-set(partly_clean_domains))
-        #
-        # for domain in partly_clean_domains:
-        #     self.clean_domain(domain, self.partly_clean_col)
-        #
-        #     quit_choice = input('\n\n==================================================================================='
-        #                         '\nDo you want to quit?(Y/n)\n')
-        #
-        #     if quit_choice in ["y", "Y"]:
-        #         sys.exit()
+        clean_domains = self.clean_col.distinct('domain')
+
+        input_domains = list(set(input_domains)-set(clean_domains)-set(partly_clean_domains))
+
+        for domain in partly_clean_domains:
+            self.clean_domain(domain, self.partly_clean_col)
+
+            quit_choice = input('\n\n==================================================================================='
+                                '\nDo you want to quit?(Y/n)\n')
+
+            if quit_choice in ["y", "Y"]:
+                sys.exit()
 
         for domain in input_domains:
             print(domain)
@@ -71,20 +71,20 @@ class Cleaner:
         tag_counter.count_tags()
         print("Tags count: ", len(tag_counter.tag_count))
 
-        sys.exit()
+        # sys.exit()
 
         # choosing lines for removing
         repeating_lines = 0
-        for count in lines_appearance.values():
+        for count in tag_counter.tag_count.values():
             if count != 1:
                 repeating_lines += 1
 
         lines_for_deleting = []
-        lines_appearance = sorted(lines_appearance.items(), key=operator.itemgetter(1), reverse=True)
-        len_lines_appearance = len(lines_appearance)
+        tag_counter.tag_count = sorted(tag_counter.tag_count.items(), key=operator.itemgetter(1), reverse=True)
+        len_tag_count = len(tag_counter.tag_count)
         i = 0
-        while i < len_lines_appearance:
-            line, count = lines_appearance[i]
+        while i < len_tag_count:
+            line, count = tag_counter.tag_count[i]
             if count != 1:
                 position = 0
                 # TODO: move all dialogs to separate functions
@@ -146,7 +146,7 @@ class Cleaner:
 
 
         # removing repeating tags
-        lines_for_deleting = dict(lines_for_deleting)
+        lines_for_deleting = dict(lines_for_deleting)  # TODO: make cleaning parallel
         pages_updated = 0
         for page in input_col.find({'domain': domain}):
             if pages_updated%1000 == 0:
