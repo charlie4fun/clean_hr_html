@@ -19,7 +19,8 @@ class TagCounter:
     def count_tags(self):
         tag_count_start_time = datetime.now()
         self.fill_htmls_queue()
-        # self.create_processors()
+
+        print("Input htmls_queue size: ", self.htmls_queue.qsize())
 
         pool = Pool(settings.NUM_PROCESSORS, self.processor)
         self.htmls_queue.join()
@@ -29,11 +30,8 @@ class TagCounter:
 
         tags_merge_start_time = datetime.now()
         while True:  # TODO: move tags merging to separete file (>20% processing time)
-            print("Tags_queue ", self.tags_queue.qsize())
-
             try:
                 tags_batch = self.tags_queue.get(True, 2)
-                print("hi!")
             except Empty:
                 print("No batches in tags_queue. Output Queue size: ", self.tags_queue.qsize(), " Input Queue size: ", self.htmls_queue.qsize())
                 break
@@ -50,7 +48,6 @@ class TagCounter:
         print("Tags counting time: %s" % (finish_time - tag_count_start_time))
 
         pool.close()  # TODO: why if we are closing pool before tags are merged tags_queue.get is getting stucked (?)
-        print("pool closed")
 
     # def persist_tags(): saves to pickle file
 
@@ -68,13 +65,6 @@ class TagCounter:
             domain_htmls = domain_htmls[batch_size:]
 
         print("HTMLs batching time: %s" % (datetime.now() - html_batch_start_time))
-
-    def create_processors(self):
-        print("Input htmls_queue size: ", self.htmls_queue.qsize())
-        pool = Pool(settings.NUM_PROCESSORS, self.processor)
-        self.htmls_queue.join()
-        # pool.close()
-        # print("pool closed")
 
     def processor(self):
         pages_processed = 0

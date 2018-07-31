@@ -71,7 +71,7 @@ class Cleaner:
         tag_counter.count_tags()
         print("Tags count: ", len(tag_counter.tag_count))
 
-        # sys.exit()
+        sys.exit()
 
         # choosing lines for removing
         repeating_lines = 0
