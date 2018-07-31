@@ -7,6 +7,14 @@ from multiprocessing import Pool, Queue, JoinableQueue
 from datetime import datetime
 from bs4 import BeautifulSoup
 
+"""
+This class is responsible for collecting and counting
+tags in one domain.
+
+Todo:
+    Add persistence for tag_count.
+"""
+
 
 class TagCounter:
 
@@ -26,15 +34,15 @@ class TagCounter:
         pool = Pool(settings.NUM_PROCESSORS, self.processor)
         self.htmls_queue.join()
 
-
         print("Output tags_queue size: ", self.tags_queue.qsize())
 
         tags_merge_start_time = datetime.now()
-        while True:  # TODO: move tags merging to separete file (>20% processing time)
+        while True:  # TODO: move tags merging to separete process (>20% processing time)
             try:
                 tags_batch = self.tags_queue.get(True, 2)
             except Empty:
-                print("No batches in tags_queue. Output Queue size: ", self.tags_queue.qsize(), " Input Queue size: ", self.htmls_queue.qsize())
+                print("No batches in tags_queue. tags_queue size: %d htmls_queue size: %d" %
+                      (self.tags_queue.qsize(), self.htmls_queue.qsize()))
                 break
 
             for tag, count in tags_batch.items():
@@ -50,7 +58,7 @@ class TagCounter:
 
         pool.close()  # TODO: why if we are closing pool before tags are merged tags_queue.get is getting stucked (?)
 
-    # def persist_tags(): saves to pickle file
+    # def persist_tags(): saves to pickle file or Mongo
 
     def fill_htmls_queue(self):
         domain_htmls = list(self.input_col.find({'domain': self.domain}))  # TODO: get slices from mongo
@@ -77,7 +85,8 @@ class TagCounter:
             try:
                 htmls_batch = self.htmls_queue.get(True, 2)  # TODO: test changing timeout
             except Empty:
-                print("No batches in htmls_queue, pid: ", pid, " Output Queue size: ", self.tags_queue.qsize(), " Input Queue size: ", self.htmls_queue.qsize())
+                print("No batches in htmls_queue, pid: %d tags_queue size: %d htmls_queue size: %d" %
+                      (pid, self.tags_queue.qsize(), self.htmls_queue.qsize()))  # TODO: check if htmls_queue still exist at that moment
                 break
 
             print("Process %d created, batch len: %d" % (pid, len(htmls_batch)))
@@ -90,7 +99,7 @@ class TagCounter:
                     soup = BeautifulSoup(page['full_page_html'], 'html.parser')
 
                 for tag in soup.find_all():
-                    stag = str(tag)
+                    stag = str(tag).strip().replace(" ", "").lower()  # TODO: add tag processing here as a separate function
 
                     if stag in tag_count:
                         tag_count[stag] += 1

@@ -8,6 +8,10 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 from tagcounter import TagCounter
 
+"""
+This class implements one of the processing flows for html documents.
+"""
+
 
 class Cleaner:
 
@@ -45,16 +49,12 @@ class Cleaner:
         clean_domains = self.clean_col.distinct('domain')
 
         input_domains = list(set(input_domains)-set(clean_domains)-set(partly_clean_domains))
-
-        for domain in partly_clean_domains:
-            self.clean_domain(domain, self.partly_clean_col)
-
-            quit_choice = dialogs.quit_dialog()
-
-            if quit_choice in ["y", "Y"]:
-                sys.exit()
+        # this manipulations made to process partly cleaned domains first
+        # and only afterwards in volve new domains
+        input_domains = partly_clean_domains + input_domains
 
         for domain in input_domains:
+            print("input_domains: ", input_domains)
             print(domain)
             self.clean_domain(domain, self.input_col)
 
@@ -67,7 +67,7 @@ class Cleaner:
 
         tag_counter = TagCounter(domain, input_col)
         tag_counter.count_tags()
-        print("Tags count: ", len(tag_counter.tag_count))
+        print("Distinct tags count: ", len(tag_counter.tag_count))
 
         # sys.exit()
 
@@ -96,7 +96,7 @@ class Cleaner:
                     break
 
                 elif delete in ["r", "R"]:
-                    while (abs(position-1)<=len(tags_for_deleting)):
+                    while (abs(position-1) <= len(tags_for_deleting)):
                         position -= 1
                         tag = tags_for_deleting[position][0]
 
@@ -114,7 +114,6 @@ class Cleaner:
                         print("\n\n===================================================================================")
                         print('No (or no more) previously processed tags')
 
-
                 else:
                     tags_for_deleting.append((tag, False))
                     i += 1
@@ -123,18 +122,14 @@ class Cleaner:
 
         # storing tags
         for tag in tags_for_deleting:
-            record = {}
-            record['tag'] = tag[0]
-            record['deleted'] = tag[1]
-            record['domain'] = domain
+            record = {'tag': tag[0], 'deleted': tag[1], 'domain': domain}
             self.tags_col.insert_one(record)
-
 
         # removing repeating tags
         tags_for_deleting = dict(tags_for_deleting)  # TODO: make cleaning parallel
         pages_updated = 0
         for page in input_col.find({'domain': domain}):
-            if pages_updated%1000 == 0:
+            if pages_updated % 1000 == 0:
                 print('%s, pages_updated = %d' %
                       (str(datetime.now()), pages_updated))
 
@@ -150,11 +145,11 @@ class Cleaner:
                 for tag in all_tags:
                     stag = str(tag)
                     if tags_for_deleting.get(stag):
-                        no_repeat_html=no_repeat_html.replace(stag, ' ')
+                        no_repeat_html = no_repeat_html.replace(stag, ' ')
 
                 page['no_repeat_html'] = no_repeat_html
             self.clean_col.insert_one(page)
-            pages_updated +=1
+            pages_updated += 1
 
         add_to_cleaned = dialogs.add_to_cleaned_dialog(domain)
         self.partly_clean_col.delete_many({'domain': domain})
