@@ -11,4 +11,4 @@ TAGS_COLLECTION = "tags_col"
 
 # counter settings
 NUM_PROCESSORS = 3
-BATCH_SIZE = 100
+BATCH_SIZE = 500

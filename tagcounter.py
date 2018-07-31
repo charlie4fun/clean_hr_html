@@ -1,5 +1,6 @@
 import os
 import settings
+import operator
 
 from queue import Empty
 from multiprocessing import Pool, Queue, JoinableQueue
@@ -104,3 +105,6 @@ class TagCounter:
 
             self.tags_queue.put(tag_count)
             self.htmls_queue.task_done()
+
+    def sort_tags(self):
+        self.tag_count = sorted(self.tag_count.items(), key=operator.itemgetter(1), reverse=True)
